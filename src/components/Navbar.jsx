@@ -1,8 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import React, { useContext } from "react";
-import "bootstrap/dist/css/bootstrap.min.css";
-import "bootstrap/dist/js/bootstrap.bundle.min.js";
 
 function Navbar() {
   const { isLoggedIn, logout } = useContext(AuthContext);
@@ -10,22 +8,25 @@ function Navbar() {
 
   const handleLogout = () => {
     logout();
-    navigate("/");
+    navigate("/user/login", { replace: true });
   };
 
   return (
-    <nav className="navbar navbar-expand-lg navbar-light bg-light">
+    <nav className="navbar navbar-expand-lg navbar-light bg-light border-bottom">
       <div className="container-fluid">
-        {/* Logo */}
-        <NavLink className="navbar-brand" to="/">
+
+        {/* Brand */}
+        <NavLink className="navbar-brand d-flex align-items-center" to="/">
           <img
             src="https://res.cloudinary.com/dwr8472qb/image/upload/v1735985550/images_kjpzhg.jpg"
-            alt="AptiCrack Logo"
+            alt="AptiCrack"
             style={{ height: "40px" }}
+            className="me-2"
           />
-        </NavLink>  
+          <span className="fw-bold">AptiCrack</span>
+        </NavLink>
 
-        {/* Toggler for mobile view */}
+        {/* Toggler */}
         <button
           className="navbar-toggler"
           type="button"
@@ -38,63 +39,67 @@ function Navbar() {
           <span className="navbar-toggler-icon"></span>
         </button>
 
-        {/* Navbar Links */}
+        {/* Links */}
         <div className="collapse navbar-collapse" id="navbarNav">
-          <ul className="navbar-nav ms-auto">
+          <ul className="navbar-nav ms-auto align-items-lg-center">
+
             <li className="nav-item">
               <NavLink
                 to="/"
                 className={({ isActive }) =>
-                  `nav-link ${isActive ? "active" : ""}`
+                  `nav-link ${isActive ? "active fw-semibold" : ""}`
                 }
               >
                 Home
               </NavLink>
             </li>
+
             {!isLoggedIn && (
               <>
                 <li className="nav-item">
                   <NavLink
                     to="/user/login"
                     className={({ isActive }) =>
-                      `nav-link ${isActive ? "active" : ""}`
+                      `nav-link ${isActive ? "active fw-semibold" : ""}`
                     }
                   >
                     Login
                   </NavLink>
                 </li>
+
                 <li className="nav-item">
                   <NavLink
                     to="/user/signup"
-                    className={({ isActive }) =>
-                      `nav-link ${isActive ? "active" : ""}`
-                    }
+                    className="btn btn-primary ms-lg-3 px-3"
                   >
                     Sign Up
                   </NavLink>
                 </li>
               </>
             )}
+
             {isLoggedIn && (
               <>
-                <li className="nav-item">
+                <li className="nav-item ms-lg-3">
                   <button
-                    className="btn btn-outline-danger nav-link"
-                    onClick={handleLogout}
-                  >
-                    Logout
-                  </button>
-                </li>
-                <li className="nav-item">
-                  <button
-                    className="btn btn-outline-primary nav-link"
+                    className="btn btn-outline-secondary px-3"
                     onClick={() => navigate("/student/dashboard")}
                   >
                     Dashboard
                   </button>
                 </li>
+
+                <li className="nav-item ms-lg-2">
+                  <button
+                    className="btn btn-outline-danger px-3"
+                    onClick={handleLogout}
+                  >
+                    Logout
+                  </button>
+                </li>
               </>
             )}
+
           </ul>
         </div>
       </div>
