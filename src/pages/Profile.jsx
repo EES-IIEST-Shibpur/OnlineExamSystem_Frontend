@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useMemo } from "react";
 import { AuthContext } from "../context/AuthContext";
 import {
   MDBContainer,
@@ -7,62 +7,81 @@ import {
   MDBCardImage,
   MDBTypography,
   MDBRow,
-  MDBCol
+  MDBCol,
 } from "mdb-react-ui-kit";
 
-const ProfilePage = () => {
+const PROFILE_FIELDS = [
+  { label: "Email", key: "email", fallback: "Not Available" },
+  { label: "Phone", key: "phone", fallback: "Not Provided" },
+  { label: "Department", key: "department", fallback: "N/A" },
+  { label: "Enrollment No", key: "enrollmentNumber", fallback: "N/A" },
+  { label: "Semester", key: "semester", fallback: "N/A" },
+  { label: "Year", key: "year", fallback: "N/A" },
+];
+
+const ProfilePage = React.memo(() => {
   const { user } = useContext(AuthContext);
+
+  const profileData = useMemo(() => {
+    return PROFILE_FIELDS.map(({ label, key, fallback }) => ({
+      label,
+      value: user?.[key] ?? fallback,
+    }));
+  }, [user]);
+
+  if (!user) {
+    return (
+      <MDBContainer className="py-5 text-center">
+        <MDBTypography tag="h5">Loading profile...</MDBTypography>
+      </MDBContainer>
+    );
+  }
 
   return (
     <MDBContainer className="py-5 d-flex justify-content-center">
-      <MDBCard className="shadow-3 p-4" style={{ maxWidth: "700px", width: "100%" }}>
+      <MDBCard className="shadow-3 w-100" style={{ maxWidth: "720px" }}>
         <MDBRow className="g-0">
-          {/* Left Section - Profile Image */}
-          <MDBCol md="4" className="d-flex justify-content-center align-items-center bg-light rounded-start">
+          {/* Profile Image */}
+          <MDBCol
+            md="4"
+            className="d-flex align-items-center justify-content-center bg-light py-4 rounded-start"
+          >
             <MDBCardImage
-              src="https://mdbcdn.b-cdn.net/img/Photos/new-templates/bootstrap-chat/ava3.webp"
-              alt="Profile Avatar"
+              src={
+                user.avatar ||
+                "https://mdbcdn.b-cdn.net/img/Photos/new-templates/bootstrap-chat/ava3.webp"
+              }
+              alt={`${user.name}'s profile avatar`}
               className="rounded-circle"
-              style={{ width: "120px", height: "120px" }}
+              style={{ width: "120px", height: "120px", objectFit: "cover" }}
             />
           </MDBCol>
 
-          {/* Right Section - Profile Details */}
+          {/* Profile Details */}
           <MDBCol md="8">
             <MDBCardBody>
-              <MDBTypography tag="h4" className="mb-3 text-center text-md-start">
-                {user?.name || "Unknown"}
+              <MDBTypography
+                tag="h4"
+                className="mb-4 text-center text-md-start"
+              >
+                {user.name || "Unknown User"}
               </MDBTypography>
 
-              <div className="mb-2 d-flex justify-content-between">
-                <strong>Email:</strong> <span>{user?.email || "Not Available"}</span>
-              </div>
-
-              <div className="mb-2 d-flex justify-content-between">
-                <strong>Phone:</strong> <span>{user?.phone || "Not Provided"}</span>
-              </div>
-
-              <div className="mb-2 d-flex justify-content-between">
-                <strong>Department:</strong> <span>{user?.department || "N/A"}</span>
-              </div>
-
-              <div className="mb-2 d-flex justify-content-between">
-                <strong>Enrollment No:</strong> <span>{user?.enrollmentNumber || "N/A"}</span>
-              </div>
-
-              <div className="mb-2 d-flex justify-content-between">
-                <strong>Semester:</strong> <span>{user?.semester || "N/A"}</span>
-              </div>
-
-              <div className="mb-2 d-flex justify-content-between">
-                <strong>Year:</strong> <span>{user?.year || "N/A"}</span>
-              </div>
+              {profileData.map(({ label, value }) => (
+                <div
+                  key={label}
+                  className="d-flex justify-content-between align-items-center mb-2"
+                >
+                  <strong>{label}:</strong>
+                  <span className="text-muted">{value}</span>
+                </div>
+              ))}
             </MDBCardBody>
           </MDBCol>
         </MDBRow>
       </MDBCard>
     </MDBContainer>
   );
-};
+});
 
 export default ProfilePage;
