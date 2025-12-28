@@ -1,4 +1,3 @@
-import axios from "axios";
 import { useState, useEffect, useContext } from "react";
 import { useParams } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
@@ -7,42 +6,67 @@ import api from "../services/AxiosInstance";
 
 const ExamInterface = () => {
   const { examId } = useParams();
+  const { token } = useContext(AuthContext);
+
   const [examData, setExamData] = useState(null);
-  const [message, setMessage] = useState("");
-  const { token, authMessage } = useContext(AuthContext);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!token || !examId) return;
+
+    const controller = new AbortController();
+
     const fetchExamData = async () => {
       try {
-        const response = await api.post(`/exam-taking/start/${examId}`, {}, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        setExamData(response.data.data.exam);
-        setMessage("");
-      } catch (error) {
-        console.error("Error fetching exam data:", error);
-        setMessage(error.response?.data?.message || "Exam could not start")
+        setLoading(true);
+        setError("");
+
+        const { data } = await api.post(
+          `/exam-taking/start/${examId}`,
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          }
+        );
+
+        setExamData(data.data.exam);
+      } catch (err) {
+        if (err.name === "CanceledError") return;
+
+        console.error("Exam start failed:", err);
+        setError(
+          err.response?.data?.message ||
+          "Unable to start exam. Please try again."
+        );
+      } finally {
+        setLoading(false);
       }
     };
 
-    if (token) {
-      fetchExamData();
-    }
+    fetchExamData();
+
+    return () => controller.abort();
   }, [examId, token]);
 
-  return (
-    <div>
-      {authMessage && <p>{authMessage}</p>}
-      {examData ? (
-        <ExamInterfaceContent examData={examData} />
-      ) : (
-        <p>Loading exam data...</p>
-      )}
-      {message && <p>{message}</p>}
-    </div>
-  );
+  /* ---------- Render States ---------- */
+
+  if (loading) {
+    return <p>Initializing exam...</p>;
+  }
+
+  if (error) {
+    return <p className="text-danger">{error}</p>;
+  }
+
+  if (!examData) {
+    return <p>Exam data unavailable.</p>;
+  }
+
+  return <ExamInterfaceContent examData={examData} />;
 };
 
 export default ExamInterface;

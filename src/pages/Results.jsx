@@ -1,48 +1,63 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
-import api from '../services/AxiosInstance';
-import ExamDetails from '../result/ExamDetails';
+import React, {
+  useState,
+  useEffect,
+  useContext,
+  useCallback,
+} from "react";
+import { AuthContext } from "../context/AuthContext";
+import api from "../services/AxiosInstance";
+import ExamDetails from "../result/ExamDetails";
 
 const Results = () => {
-  const [examResults, setExamResults] = useState([]);
-  const [loading, setLoading] = useState(true);
   const { token } = useContext(AuthContext);
 
+  const [examResults, setExamResults] = useState([]);
+  const [expandedExamId, setExpandedExamId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchResults = async () => {
       try {
-        const response = await api.get('/results', {
+        const res = await api.get("/results", {
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
         });
-        const examsWithDetails = response.data.data.map(exam => ({
-          ...exam,
-          showDetails: false
-        }));
-        setExamResults(examsWithDetails);
-      } catch (error) {
-        console.error('Error fetching results', error);
+
+        setExamResults(res.data.data || []);
+      } catch (err) {
+        if (err.name !== "CanceledError") {
+          console.error("Error fetching results:", err);
+          setError("Failed to load results");
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchResults();
+
+    return () => controller.abort();
   }, [token]);
 
-  const toggleExamDetails = (examId) => {
-    setExamResults(prevResults =>
-      prevResults.map(exam =>
-        exam._id === examId
-          ? { ...exam, showDetails: !exam.showDetails }
-          : exam
-      )
+  const toggleExamDetails = useCallback((examId) => {
+    setExpandedExamId((prev) =>
+      prev === examId ? null : examId
     );
-  };
+  }, []);
+
+  /* ---------- Render States ---------- */
 
   if (loading) {
-    return <p>Loading...</p>;
+    return <p>Loading results...</p>;
+  }
+
+  if (error) {
+    return <p className="text-danger">{error}</p>;
   }
 
   if (examResults.length === 0) {
@@ -52,8 +67,14 @@ const Results = () => {
   return (
     <div className="exam-results">
       <h3>Exam Results</h3>
+
       {examResults.map((exam) => (
-        <ExamDetails key={exam._id} exam={exam} selectedExam={toggleExamDetails} />
+        <ExamDetails
+          key={exam._id}
+          exam={exam}
+          isExpanded={expandedExamId === exam._id}
+          onToggle={toggleExamDetails}
+        />
       ))}
     </div>
   );

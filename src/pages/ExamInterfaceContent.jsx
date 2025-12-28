@@ -1,5 +1,5 @@
+import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import React, { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
 import api from "../services/AxiosInstance";
 import "../styles/ExamInterfaceContent.css";
@@ -9,169 +9,170 @@ const ExamInterfaceContent = ({ examData }) => {
   const { token } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const [timeRemaining, setTimeRemaining] = useState(() => {
-    const savedEndTime = localStorage.getItem(`exam_${examId}_endTime`);
-    const currentEndTime = new Date(examData.endTime).getTime();
-    return savedEndTime
-      ? Math.max(0, Math.floor((savedEndTime - Date.now()) / 1000))
-      : Math.max(0, Math.floor((currentEndTime - Date.now()) / 1000));
-  });
+  /* ---------------- Persistent Exam End Time ---------------- */
+  const endTimeRef = useRef(() => {
+    const stored = localStorage.getItem(`exam_${examId}_endTime`);
+    const endTime = stored
+      ? Number(stored)
+      : new Date(examData.endTime).getTime();
 
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answeredQuestions, setAnsweredQuestions] = useState(new Set());
-  const [answers, setAnswers] = useState(() => {
-    const savedAnswers = localStorage.getItem(`exam_${examId}_answers`);
-    return savedAnswers ? JSON.parse(savedAnswers) : [];
-  });
-
-  useEffect(() => {
-    if (answers.length > 0) {
-      const answeredIndices = answers.map((answer) =>
-        examData.questions.findIndex((q) => q._id === answer.questionId)
-      );
-      setAnsweredQuestions(new Set(answeredIndices));
-    }
-
-    const endTime = new Date(examData.endTime).getTime();
     localStorage.setItem(`exam_${examId}_endTime`, endTime);
+    return endTime;
+  });
 
-    const calculateRemainingTime = () =>
-      Math.max(0, Math.floor((endTime - Date.now()) / 1000));
-    setTimeRemaining(calculateRemainingTime());
+  /* ---------------- Core States ---------------- */
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState(() =>
+    Math.max(0, Math.floor((endTimeRef.current() - Date.now()) / 1000))
+  );
 
-    const timerInterval = setInterval(() => {
-      const remaining = calculateRemainingTime();
+  const [answers, setAnswers] = useState(() => {
+    const stored = localStorage.getItem(`exam_${examId}_answers`);
+    return stored ? JSON.parse(stored) : [];
+  });
+
+  /* ---------------- Derived States ---------------- */
+  const answeredQuestions = useMemo(() => {
+    return new Set(
+      answers.map((a) =>
+        examData.questions.findIndex((q) => q._id === a.questionId)
+      )
+    );
+  }, [answers, examData.questions]);
+
+  const currentQuestion = useMemo(() => {
+    const q = examData.questions[currentQuestionIndex];
+    return {
+      ...q,
+      selectedOption: answers.find(
+        (a) => a.questionId === q._id
+      )?.selectedOption,
+    };
+  }, [currentQuestionIndex, answers, examData.questions]);
+
+  /* ---------------- Timer Effect ---------------- */
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const remaining = Math.max(
+        0,
+        Math.floor((endTimeRef.current() - Date.now()) / 1000)
+      );
+
       setTimeRemaining(remaining);
 
-      if (remaining <= 0) {
-        clearInterval(timerInterval);
-        alert("Time's up! Submitting your exam.");
-        handleSubmit();
+      if (remaining === 0) {
+        clearInterval(interval);
+        handleSubmit(true);
       }
     }, 1000);
 
-    return () => clearInterval(timerInterval);
-  }, [examId, answers, examData]);
+    return () => clearInterval(interval);
+  }, []);
 
+  /* ---------------- Persist Answers ---------------- */
+  useEffect(() => {
+    localStorage.setItem(
+      `exam_${examId}_answers`,
+      JSON.stringify(answers)
+    );
+  }, [answers, examId]);
+
+  /* ---------------- Handlers ---------------- */
   const handleOptionChange = (optionId) => {
-    const updatedQuestions = [...examData.questions];
-    updatedQuestions[currentQuestionIndex].selectedOption = optionId;
-
-    const updatedAnswers = [
-      ...answers.filter(
-        (answer) => answer.questionId !== updatedQuestions[currentQuestionIndex]._id
+    setAnswers((prev) => [
+      ...prev.filter(
+        (a) => a.questionId !== currentQuestion._id
       ),
       {
-        questionId: updatedQuestions[currentQuestionIndex]._id,
+        questionId: currentQuestion._id,
         selectedOption: optionId,
       },
-    ];
-
-    setAnswers(updatedAnswers);
-    setAnsweredQuestions((prev) => new Set(prev).add(currentQuestionIndex));
-
-    localStorage.setItem(`exam_${examId}_answers`, JSON.stringify(updatedAnswers));
+    ]);
   };
 
-  const handleSubmit = async () => {
-    const submissionData = {
-      examId,
-      answers,
-    };
-
+  const handleSubmit = async (auto = false) => {
     try {
-      const response = await api.post(
+      await api.post(
         "/exam-taking/submit",
-        submissionData,
+        { examId, answers },
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
-      alert(response.data.message);
+
       localStorage.removeItem(`exam_${examId}_answers`);
+      localStorage.removeItem(`exam_${examId}_endTime`);
+
+      if (!auto) alert("Exam submitted successfully");
       navigate("/student/dashboard");
-    } catch (error) {
-      console.error("Error submitting exam:", error);
-      alert(error.response?.data?.message || "There was an issue submitting the exam. Please try again.");
+    } catch (err) {
+      console.error("Submission failed:", err);
+      if (!auto)
+        alert(err.response?.data?.message || "Submission failed");
     }
   };
 
-  const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes}:${secs < 10 ? "0" : ""}${secs}`;
-  };
+  /* ---------------- Utils ---------------- */
+  const formatTime = (s) =>
+    `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
-  const currentQuestion = {
-    ...examData.questions[currentQuestionIndex],
-    selectedOption: answers.find(
-      (answer) =>
-        answer.questionId === examData.questions[currentQuestionIndex]._id
-    )?.selectedOption,
-  };
-
+  /* ---------------- Render ---------------- */
   return (
     <div className="exam-interface">
-      <div className="exam-header">
+      <header className="exam-header">
         <h1>{examData.title}</h1>
-        <div className="timer">Time Remaining: {formatTime(timeRemaining)}</div>
-      </div>
+        <div className="timer">{formatTime(timeRemaining)}</div>
+      </header>
 
-      <div className="question-section">
-        <div className="question-number">
-          <h3>
-            Question {currentQuestionIndex + 1}: {currentQuestion.text}
-          </h3>
-        </div>
+      <section className="question-section">
+        <h3>
+          Question {currentQuestionIndex + 1}: {currentQuestion.text}
+        </h3>
 
-        {currentQuestion.options.map((option) => (
-          <div key={option._id} className="option">
+        {currentQuestion.options.map((opt) => (
+          <label key={opt._id} className="option">
             <input
               type="radio"
-              name={`answer-${currentQuestionIndex}`}
-              checked={currentQuestion.selectedOption === option._id}
-              onChange={() => handleOptionChange(option._id)}
+              checked={currentQuestion.selectedOption === opt._id}
+              onChange={() => handleOptionChange(opt._id)}
             />
-            <label>{option.text}</label>
-          </div>
+            {opt.text}
+          </label>
         ))}
-      </div>
+      </section>
 
-      <div className="navigation">
+      <nav className="navigation">
         <button
-          onClick={() => setCurrentQuestionIndex((prev) => prev - 1)}
           disabled={currentQuestionIndex === 0}
-          className="btn btn-secondary"
+          onClick={() => setCurrentQuestionIndex((i) => i - 1)}
         >
           Previous
         </button>
+
         <button
-          onClick={() => setCurrentQuestionIndex((prev) => prev + 1)}
-          disabled={currentQuestionIndex === examData.questions.length - 1}
-          className="btn btn-secondary"
+          disabled={
+            currentQuestionIndex === examData.questions.length - 1
+          }
+          onClick={() => setCurrentQuestionIndex((i) => i + 1)}
         >
           Next
         </button>
-        <button onClick={handleSubmit} className="btn btn-danger">
-          Submit Exam
+
+        <button className="submit" onClick={() => handleSubmit(false)}>
+          Submit
         </button>
-      </div>
+      </nav>
 
       <div className="question-navigation">
-        <h4>Navigate through questions:</h4>
-        <div className="question-navigation-buttons">
-          {examData.questions.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => setCurrentQuestionIndex(index)}
-              className={answeredQuestions.has(index) ? "answered" : ""}
-            >
-              {index + 1}
-            </button>
-          ))}
-        </div>
+        {examData.questions.map((_, i) => (
+          <button
+            key={i}
+            className={answeredQuestions.has(i) ? "answered" : ""}
+            onClick={() => setCurrentQuestionIndex(i)}
+          >
+            {i + 1}
+          </button>
+        ))}
       </div>
     </div>
   );
